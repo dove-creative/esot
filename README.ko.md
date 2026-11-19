@@ -4,6 +4,8 @@
 
 ESOT(Equal Sources of Truth)는 같은 리소스 묶음을 여러 로컬 워크트리에서 독립적으로 편집하는 CLI입니다. 워크트리마다 현재 파일과 과거 원본의 보관 한도를 관리합니다. Git은 파일 경로와 SHA-256을 커밋하고, ESOT는 실제 파일을 각 워크트리에 보관합니다.
 
+[프로젝트 개요](docs/README.ko.md) · [저장 구조와 복구](docs/Architecture.ko.md) · [테스트와 실행 결과](tests/README.ko.md)
+
 ## 설치
 
 Git과 .NET 10 SDK가 필요합니다. 소스에서 .NET 도구를 빌드해 설치합니다.

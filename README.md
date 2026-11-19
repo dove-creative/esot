@@ -4,6 +4,8 @@
 
 ESOT (Equal Sources of Truth) is a CLI for editing the same resource collection in several independent local worktrees. Each worktree holds its current files and sets its own budget for old content. Git commits record file paths and SHA-256 hashes. ESOT keeps the file contents in each worktree.
 
+[Project overview](docs/README.md) · [Storage and recovery](docs/Architecture.md) · [Tests and results](tests/README.md)
+
 ## Installation
 
 Install Git and the .NET 10 SDK, then build and install the .NET tool from source.
