@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/dependencies/">
+    <Project Path="dependencies/unitest/src/BlackThunder.UniTest/BlackThunder.UniTest.csproj" />
+  </Folder>
+  <Project Path="src/Esot/Esot.csproj" />
+  <Project Path="tests/Esot.Tests/Esot.Tests.csproj" />
+</Solution>

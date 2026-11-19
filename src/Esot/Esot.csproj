@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>esot</AssemblyName>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>esot</ToolCommandName>
+    <PackageId>ESOT</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>dove-creative</Authors>
+    <Description>Local version control for equal resource worktrees.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/dove-creative/esot</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>
