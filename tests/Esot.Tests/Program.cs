@@ -152,6 +152,81 @@ namespace Esot.Tests
             Run(a, 1, "worktree", "add", "D", Path.Combine(a, "nested"));
         }
 
+        private static void ScanChecks(string root)
+        {
+            var dir = Directory.CreateDirectory(Path.Combine(root, "scan")).FullName;
+            var file = Path.Combine(dir, "토끼.psd");
+            var cache = Path.Combine(dir, ".worktree", "scan-v1.json");
+            var stamp = DateTime.UtcNow.AddDays(-2);
+            string original = new string('a', 17000) + "x";
+            string changed = new string('a', 17000) + "y";
+            File.WriteAllText(file, original);
+            File.SetLastWriteTimeUtc(file, stamp);
+            Run(dir, 0, "init", "Scan");
+            var obj = Path.Combine(dir, ".storage", Hash(original));
+
+            // Older worktrees have no index. A warm scan must also work without read access to either stream.
+            File.Delete(cache);
+            var clean = Run(dir, 0, "status");
+            Check(File.Exists(cache), "Missing scan index");
+            using (File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            using (File.Open(obj, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Check(Run(dir, 0, "status") == clean, "Cache hit read file data");
+                Run(dir, 0, "commit", "-m", "No content change");
+            }
+
+            // Touch only. A mismatch in the last chunk models a retained object under an occupied key.
+            File.SetLastWriteTimeUtc(file, stamp.AddMinutes(1));
+            File.WriteAllText(obj, changed);
+            Check(Run(dir, 1, "status").Contains("different bytes"), "Missed same-key mismatch on status");
+            Check(Run(dir, 1, "commit", "-m", "Reject collision").Contains("different bytes"), "Missed same-key mismatch on commit");
+            Check(File.ReadAllText(obj) == changed && File.ReadAllText(file) == original, "Collision destroyed bytes");
+            File.WriteAllText(obj, original);
+            Check(Run(dir, 0, "status") == clean, "Touch changed the revision");
+            using (File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                Check(Run(dir, 0, "status") == clean, "Touch was not cached");
+
+            // A same-size edit with a new timestamp must be captured even after status cached its new key.
+            File.WriteAllText(file, changed);
+            File.SetLastWriteTimeUtc(file, stamp.AddMinutes(2));
+            Check(Run(dir, 0, "status").Contains("M\t토끼.psd"), "Same-size change missed");
+            Run(dir, 0, "commit", "-m", "Changed bytes");
+            Check(File.ReadAllText(Path.Combine(dir, ".storage", Hash(changed))) == changed, "Snapshot missing after status");
+
+            // An ambiguous timestamp cannot be trusted even when the next edit preserves size and time.
+            var future = DateTime.UtcNow.AddMinutes(5);
+            File.SetLastWriteTimeUtc(file, future);
+            Run(dir, 0, "status");
+            File.WriteAllText(file, original);
+            File.SetLastWriteTimeUtc(file, future);
+            Check(Run(dir, 0, "status").Contains("M\t토끼.psd"), "Racy timestamp hid edit");
+
+            // Length changes invalidate a stable timestamp as well.
+            File.SetLastWriteTimeUtc(file, stamp);
+            Run(dir, 0, "status");
+            File.WriteAllText(file, "short");
+            File.SetLastWriteTimeUtc(file, stamp);
+            Run(dir, 0, "commit", "-m", "Resize");
+            Check(File.ReadAllText(Path.Combine(dir, ".storage", Hash("short"))) == "short", "Length change missed");
+
+            // A dirty path first seen without an object can later encounter an occupied key in a peer.
+            string peer = Path.Combine(root, "scan-peer");
+            Run(dir, 0, "worktree", "add", "Peer", peer);
+            string extra = Path.Combine(dir, "new.txt");
+            File.WriteAllText(extra, "left");
+            File.SetLastWriteTimeUtc(extra, stamp);
+            Run(dir, 0, "status");
+            string occupied = Path.Combine(peer, ".storage", Hash("left"));
+            File.WriteAllText(occupied, "right");
+            Check(Run(dir, 1, "commit", "-m", "Reject peer collision").Contains("different bytes"), "Peer mismatch missed");
+            Check(File.ReadAllText(extra) == "left" && File.ReadAllText(occupied) == "right", "Peer collision destroyed data");
+            File.Delete(occupied);
+            File.WriteAllText(file, original);
+            File.WriteAllText(cache, "{broken");
+            Check(Run(dir, 0, "status").Contains("M\t토끼.psd"), "Malformed index did not rebuild");
+        }
+
         public static async Task Main()
         {
             for (int seed = 0; seed < 3; seed++)
@@ -166,6 +241,8 @@ namespace Esot.Tests
             try
             {
                 Environment.SetEnvironmentVariable("ESOT_HOME", Path.Combine(rootPath, "history"));
+                ScanChecks(rootPath);
+                Console.WriteLine("Scan cache and collision checks: OK");
                 Integration(rootPath);
                 Console.WriteLine("CLI integration: OK");
             }

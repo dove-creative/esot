@@ -14,7 +14,7 @@ Install Git and the .NET 10 SDK, then build and install the .NET tool from sourc
 git clone --recurse-submodules https://github.com/dove-creative/esot.git
 cd esot
 dotnet pack src/Esot -c Release -o artifacts/packages
-dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.0
+dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.1
 esot --help
 ```
 

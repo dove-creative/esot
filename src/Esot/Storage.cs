@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Enumeration;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Esot
 {
@@ -49,9 +50,62 @@ namespace Esot
         private static bool Reserved(string part) =>
             new[] { ".worktree", ".storage", ".git" }.Contains(part, StringComparer.OrdinalIgnoreCase);
 
-        internal Manifest Scan(string[] ignores, bool capture)
+        private string CachePath => Path.Combine(Root, ".worktree", "scan-v1.json");
+
+        private Dictionary<string, ScanEntry> ReadCache()
+        {
+            CheckAncestors(Path.GetDirectoryName(CachePath)!);
+            if (!File.Exists(CachePath)) return new();
+            CheckLink(CachePath);
+            try { return Data.Read<Dictionary<string, ScanEntry>>(CachePath); }
+            catch (JsonException) { return new(); }
+            catch (InvalidDataException) { return new(); }
+        }
+
+        internal void ForgetPaths(IEnumerable<string> paths)
+        {
+            var cache = ReadCache();
+            bool changed = false;
+            foreach (var path in paths) changed |= cache.Remove(path);
+            if (changed) Data.Write(CachePath, cache);
+        }
+
+        internal Manifest Scan(string[] ignores, bool capture, IEnumerable<Worktree> peers)
         {
             var files = new Manifest();
+            bool registered = File.Exists(Identity);
+            var previous = registered ? ReadCache() : new Dictionary<string, ScanEntry>();
+            var updated = new Dictionary<string, ScanEntry>(StringComparer.Ordinal);
+            long safeBefore = DateTime.UtcNow.AddSeconds(-2).Ticks;
+
+            void Inspect(FileInfo file, string relative)
+            {
+                long size = file.Length;
+                long mtime = file.LastWriteTimeUtc.Ticks;
+                bool stable = mtime < safeBefore;
+                previous.TryGetValue(relative, out var entry);
+                bool hit = stable && entry != null && entry.Reusable && entry.Size == size &&
+                    entry.Modified == mtime && entry.Key is { Length: 64 } && entry.Key.All(char.IsAsciiHexDigit);
+                string key = hit ? entry!.Key : Digest(file.FullName);
+                bool stored = File.Exists(ObjectPath(key));
+                bool verified = hit && entry!.VerifiedCopy && entry.StoredLocally == stored && (!capture || stored);
+                if (!verified)
+                {
+                    verified = VerifyCopies(file.FullName, key, peers);
+                    if (capture && !stored)
+                    {
+                        StoreNew(file.FullName, key);
+                        stored = true;
+                        verified = true;
+                    }
+                }
+                file.Refresh();
+                if (!file.Exists || file.Length != size || file.LastWriteTimeUtc.Ticks != mtime)
+                    throw Cli.Error("File changed during scan", "검사 도중 파일이 변경되었습니다", file.FullName);
+                updated.Add(relative, new ScanEntry(size, mtime, key, stable, verified, stored));
+                files.Add(relative, key);
+            }
+
             void Walk(string dir)
             {
                 foreach (var entry in new DirectoryInfo(dir).EnumerateFileSystemInfos())
@@ -61,11 +115,14 @@ namespace Esot
                         pattern.Contains('/') ? relative : entry.Name, ignoreCase: true))) continue;
                     CheckLink(entry.FullName);
                     if (entry is DirectoryInfo) Walk(entry.FullName);
-                    else files.Add(relative, capture ? Save(entry.FullName) : Digest(entry.FullName));
+                    else Inspect((FileInfo)entry, relative);
                 }
             }
             CheckAncestors(Root);
             Walk(Root);
+            if (registered && (previous.Count != updated.Count || updated.Any(pair =>
+                !previous.TryGetValue(pair.Key, out var old) || old != pair.Value)))
+                Data.Write(CachePath, updated);
             return files;
         }
 
@@ -84,20 +141,50 @@ namespace Esot
             return result;
         }
 
-        internal string Save(string path)
+        internal static bool VerifyCopies(string path, string key, IEnumerable<Worktree> peers)
+        {
+            bool found = false;
+            foreach (var tree in peers)
+            {
+                var stored = tree.ObjectPath(key);
+                if (!File.Exists(stored)) continue;
+                VerifyEqual(path, stored, key);
+                found = true;
+            }
+            return found;
+        }
+
+        internal static void VerifyEqual(string path, string stored, string key)
+        {
+            using var left = File.OpenRead(path);
+            using var right = File.OpenRead(stored);
+            Span<byte> a = stackalloc byte[8192];
+            Span<byte> b = stackalloc byte[8192];
+            if (left.Length == right.Length)
+            {
+                while (true)
+                {
+                    int read = left.ReadAtLeast(a, a.Length, false);
+                    int other = right.ReadAtLeast(b, b.Length, false);
+                    if (read != other || !a[..read].SequenceEqual(b[..other])) break;
+                    if (read == 0) return;
+                }
+            }
+            throw Cli.Error("Same SHA-256 key, different bytes (collision or damaged snapshot)",
+                "같은 SHA-256 키의 바이트가 다릅니다 (충돌 또는 사본 손상)", $"{key} [{path}] [{stored}]");
+        }
+
+        internal void StoreNew(string path, string key)
         {
             CheckAncestors(Objects);
             Directory.CreateDirectory(Objects);
-            string key = Digest(path);
             var dest = ObjectPath(key);
-            if (File.Exists(dest)) return key;
             string temp = Path.Combine(Objects, Guid.NewGuid().ToString("N") + ".tmp");
             try
             {
                 File.Copy(path, temp);
                 if (Digest(temp) != key) throw Cli.Error("File changed while reading", "읽는 도중 파일이 변경되었습니다", path);
                 File.Move(temp, dest);
-                return key;
             }
             finally { File.Delete(temp); }
         }
@@ -136,6 +223,8 @@ namespace Esot
             }
         }
     }
+
+    internal sealed record ScanEntry(long Size, long Modified, string Key, bool Reusable, bool VerifiedCopy, bool StoredLocally);
 
     internal record Identity(string Name, string Repository);
     internal sealed class Settings

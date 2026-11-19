@@ -101,7 +101,7 @@ namespace Esot
             var tree = new Worktree { Name = name, Root = path, HistoryLimit = limit };
             string head = Repo.Head(source.Name);
             var files = Repo.Files(head);
-            foreach (var existing in tree.Scan(Config.Ignore, false))
+            foreach (var existing in Scan(tree, false))
                 if (!files.TryGetValue(existing.Key, out var key) || key != existing.Value)
                     throw Cli.Error("Existing file differs from the source commit", "기존 파일이 원본 커밋과 다릅니다", existing.Key);
             Data.Write(Pending, new Journal(new[] { new Changes { Name = name, After = head } }, tree));
@@ -118,7 +118,7 @@ namespace Esot
         internal void Commit(Worktree tree, string message)
         {
             string old = Repo.Head(tree.Name);
-            var current = tree.Scan(Config.Ignore, true);
+            var current = Scan(tree, true);
             var before = Repo.Files(old);
             if (before.SequenceEqual(current)) return;
             string next = Repo.Commit(current, message, old);
@@ -137,12 +137,21 @@ namespace Esot
                 throw Cli.Error("File absent at this commit", "해당 커밋에 파일이 없습니다", path);
             string dest = tree.Target(path);
             Repo.Files(Repo.Head(tree.Name)).TryGetValue(path, out var current);
-            string? disk = File.Exists(dest) ? Worktree.Digest(dest) : null;
+            string? disk = VerifiedDiskKey(dest);
             if (disk == key) return;
             if (disk != current) throw Cli.Error("Working file changed", "작업 파일이 변경되었습니다", path);
             var local = Config.Worktrees.Values.Select(peer => peer.ObjectPath(key)).FirstOrDefault(File.Exists);
             if (local == null) throw Cli.Error("No retained copy", "보관된 사본이 없습니다", key);
+            tree.ForgetPaths(new[] { path });
             CopyVerified(tree, local, key, dest);
+        }
+
+        private string? VerifiedDiskKey(string path)
+        {
+            if (!File.Exists(path)) return null;
+            string key = Worktree.Digest(path);
+            Worktree.VerifyCopies(path, key, Config.Worktrees.Values);
+            return key;
         }
 
         private static void CopyVerified(Worktree tree, string source, string key, string dest)
@@ -166,15 +175,17 @@ namespace Esot
             {
                 string asset = donor.ObjectPath(key);
                 if (!File.Exists(asset)) continue;
-                if (target.Save(asset) != key) throw new InvalidDataException(key);
+                target.StoreNew(asset, key);
                 return;
             }
             throw Cli.Error("Missing file content", "파일 원본을 찾을 수 없습니다", key);
         }
 
+        internal Manifest Scan(Worktree tree, bool capture) => tree.Scan(Config.Ignore, capture, Config.Worktrees.Values);
+
         internal void RequireClean(Worktree tree)
         {
-            if (!tree.Scan(Config.Ignore, false).SequenceEqual(Repo.Files(Repo.Head(tree.Name))))
+            if (!Scan(tree, false).SequenceEqual(Repo.Files(Repo.Head(tree.Name))))
                 throw Cli.Error("Commit working changes first", "작업 중인 변경을 먼저 커밋하세요", tree.Name);
         }
 
@@ -215,7 +226,7 @@ namespace Esot
                 if (Directory.Exists(dest)) throw Cli.Error("Directory blocks file", "폴더가 파일 경로를 사용 중입니다", dest);
                 for (var dir = Directory.GetParent(dest); dir != null && !string.Equals(dir.FullName, tree.Root, Worktree.Paths); dir = dir.Parent)
                     if (File.Exists(dir.FullName)) throw new IOException(dir.FullName);
-                string? disk = File.Exists(dest) ? Worktree.Digest(dest) : null;
+                string? disk = VerifiedDiskKey(dest);
                 if (disk != previous && !(resuming && disk == next)) throw Cli.Error("Working file changed", "작업 파일이 변경되었습니다", dest);
                 if (next != null && Worktree.Digest(tree.ObjectPath(next)) != next) throw new InvalidDataException(next);
             }
@@ -228,7 +239,7 @@ namespace Esot
                 var tree = Tree(Data.Read<string>(Initializing));
                 if (Repo.Run(null, "for-each-ref", "--format=%(objectname)", Repository.Ref(tree.Name)).Length == 0)
                 {
-                    var first = Repo.Commit(tree.Scan(Config.Ignore, true), "Initialize " + tree.Name);
+                    var first = Repo.Commit(Scan(tree, true), "Initialize " + tree.Name);
                     Repo.Run(null, "update-ref", Repository.Ref(tree.Name), first);
                 }
                 File.Delete(Initializing);
@@ -251,13 +262,14 @@ namespace Esot
                 var tree = Tree(change.Name);
                 var before = change.Before == null ? new Manifest() : Repo.Files(change.Before);
                 var after = Repo.Files(change.After);
+                tree.ForgetPaths(Keys(before, after).Where(path => before.GetValueOrDefault(path) != after.GetValueOrDefault(path)));
                 foreach (string path in Keys(before, after))
                 {
                     before.TryGetValue(path, out var previous);
                     after.TryGetValue(path, out var next);
                     if (previous == next) continue;
                     string dest = tree.Target(path);
-                    string? disk = File.Exists(dest) ? Worktree.Digest(dest) : null;
+                    string? disk = VerifiedDiskKey(dest);
                     if (disk == next) continue;
                     if (disk != previous) throw Cli.Error("Working file changed", "작업 파일이 변경되었습니다", dest);
                     if (next == null) File.Delete(dest);

@@ -14,7 +14,7 @@ Git과 .NET 10 SDK가 필요합니다. 소스에서 .NET 도구를 빌드해 설
 git clone --recurse-submodules https://github.com/dove-creative/esot.git
 cd esot
 dotnet pack src/Esot -c Release -o artifacts/packages
-dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.0
+dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.1
 esot --help
 ```
 

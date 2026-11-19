@@ -96,7 +96,7 @@ namespace Esot
                         string head = ws.Repo.Head(name);
                         Console.WriteLine($"{name}\t{head}");
                         var original = ws.Repo.Files(head);
-                        var live = tree.Scan(ws.Config.Ignore, false);
+                        var live = ws.Scan(tree, false);
                         foreach (string path in original.Keys.Union(live.Keys).OrderBy(p => p, StringComparer.Ordinal))
                         {
                             original.TryGetValue(path, out var old);

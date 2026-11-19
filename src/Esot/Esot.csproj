@@ -6,7 +6,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>esot</ToolCommandName>
     <PackageId>ESOT</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>dove-creative</Authors>
     <Description>Local version control for equal resource worktrees.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

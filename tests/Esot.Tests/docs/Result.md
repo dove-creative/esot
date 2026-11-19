@@ -2,6 +2,12 @@
 
 [한국어](Result.ko.md)
 
+## 0.1.1 verification
+
+On 2026-11-19 both the scan-cache and collision scenario and the worktree integration scenario passed on Windows Release. Checks covered cache hits under exclusive locks, detection of mismatched bytes under an occupied key, and preservation of both the working file and stored object. UniTest seeds 0, 1 and 2 each passed to depth 100.
+
+## 0.1.0 verification
+
 Verified ESOT 0.1.0 at commit `2dc8701` on Windows on 2026-11-19 at 16:23 KST, using .NET SDK 10.0.404 and Git 2.53.0.windows.3. The Release build completed with zero warnings and zero errors.
 
 ```powershell
