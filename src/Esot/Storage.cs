@@ -13,7 +13,7 @@ namespace Esot
         public string Name { get; set; } = "";
         public string Root { get; set; } = "";
         public long HistoryLimit { get; set; } = 10_000_000_000;
-        internal string Objects => Path.Combine(Root, ".storage");
+        internal string Objects => Path.Combine(Root, ".worktree", "storage");
         internal string Identity => Path.Combine(Root, ".worktree", "worktree.json");
 
         internal static readonly StringComparison Paths = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
@@ -32,6 +32,23 @@ namespace Esot
         {
             for (var dir = new DirectoryInfo(path); dir != null; dir = dir.Parent)
                 if (dir.Exists || dir.LinkTarget != null) CheckLink(dir.FullName);
+        }
+
+        internal void MigrateStorage(string repository)
+        {
+            string legacy = Path.Combine(Root, ".storage");
+            if (!Directory.Exists(legacy)) return;
+
+            CheckAncestors(legacy);
+            CheckAncestors(Objects);
+            CheckLink(Identity);
+            var identity = Data.Read<Identity>(Identity);
+            if (identity.Name != Name || !string.Equals(identity.Repository, repository, Paths))
+                throw Cli.Error("Worktree registration mismatch", "워크트리 등록 정보가 일치하지 않습니다", Root);
+            if (Path.Exists(Objects))
+                throw Cli.Error("Both snapshot locations exist", "이전 사본 경로와 새 사본 경로가 모두 존재합니다", $"{legacy}, {Objects}");
+
+            Directory.Move(legacy, Objects);
         }
 
         internal string Target(string relative)

@@ -41,10 +41,16 @@ namespace Esot
                 if (!File.Exists(file)) continue;
                 var id = Data.Read<Identity>(file);
                 var ws = new Workspace(id.Repository);
-                if (ws.Config.Worktrees.TryGetValue(id.Name, out var tree) && string.Equals(dir.FullName, tree.Root, Worktree.Paths))
-                { name = id.Name; return ws; }
-                ws.Dispose();
-                throw Cli.Error("Worktree registration mismatch", "워크트리 등록 정보가 일치하지 않습니다", dir.FullName);
+                try
+                {
+                    if (!ws.Config.Worktrees.TryGetValue(id.Name, out var tree) || !string.Equals(dir.FullName, tree.Root, Worktree.Paths))
+                        throw Cli.Error("Worktree registration mismatch", "워크트리 등록 정보가 일치하지 않습니다", dir.FullName);
+                    foreach (var peer in ws.Config.Worktrees.Values)
+                        peer.MigrateStorage(ws.Repo.Location);
+                    name = id.Name;
+                    return ws;
+                }
+                catch { ws.Dispose(); throw; }
             }
             throw Cli.Error("Run inside an ESOT worktree or use -C", "ESOT 워크트리 안에서 실행하거나 -C를 사용하세요");
         }

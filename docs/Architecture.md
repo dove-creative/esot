@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Ordinary files in each worktree | Current contents read and written by editors | Working copies, including uncommitted changes. |
 | `.worktree/worktree.json` in each worktree | Worktree name and path to the shared repository | Connects the current directory to its branch and shared history. |
-| `.storage` in each worktree | Whole-file snapshots identified by SHA-256 | Files with identical content share one snapshot within that worktree. |
+| `.worktree/storage` in each worktree | Whole-file snapshots identified by SHA-256 | Files with identical content share one snapshot within that worktree. |
 | Shared local Git repository | A `files.json` manifest of relative paths and hashes per commit, parent commits and one branch per worktree | Commit history and merge bases remain available after old resource bytes are removed. |
 
 The shared repository also holds the worktree paths, their retention limits and the common ignore patterns. `ESOT_HOME` selects its parent directory during initialization. A recoverable backup needs the shared repository and copies of every resource version you intend to retain.

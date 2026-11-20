@@ -14,7 +14,7 @@ Git과 .NET 10 SDK가 필요합니다. 소스에서 .NET 도구를 빌드해 설
 git clone --recurse-submodules https://github.com/dove-creative/esot.git
 cd esot
 dotnet pack src/Esot -c Release -o artifacts/packages
-dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.1
+dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.2
 esot --help
 ```
 
@@ -52,7 +52,7 @@ esot -C ./Common gc
 
 워크트리별 기본 한도는 과거 파일 내용 10GB(10,000,000,000바이트)입니다. 0은 과거 내용 보관량 0바이트입니다. 현재 커밋을 복원할 사본은 항상 한도 계산에서 제외됩니다. 한도를 초과하면 해당 워크트리에서 가장 먼저 과거 버전이 된 사본부터 정리합니다. 마지막 사본이 삭제된 버전은 이력과 해시만 조회할 수 있습니다. Unity에서만 보유한 과거 사본이 Common으로 자동 전송되지는 않습니다. 보관된 파일을 복원하려면 `esot log`에서 커밋을 찾고 `esot restore --source <commit> "토끼.psd"`를 실행합니다. 등록된 워크트리에 남아 있는 사본을 가져와 작업 변경으로 복원합니다.
 
-지정 경로의 `.worktree/worktree.json`에는 워크트리 이름과 공유 메타데이터 저장소 위치가 있고, `.storage`에는 실제 파일 내용이 있습니다. 공유 저장소는 기본적으로 사용자 로컬 앱 데이터 아래 `ESOT`에 생성됩니다. `init` 전에 `ESOT_HOME`을 지정하면 위치를 선택할 수 있습니다. 백업할 때는 이 저장소와 각 워크트리를 함께 보관합니다. 이 버전은 한 PC에서 고정된 폴더 경로를 사용합니다.
+지정 경로의 `.worktree/worktree.json`에는 워크트리 이름과 공유 메타데이터 저장소 위치가 있고, `.worktree/storage`에는 실제 파일 내용이 있습니다. ESOT 0.1.2로 기존 작업 공간을 처음 열면 등록된 워크트리마다 최상위 `.storage`를 `.worktree/storage`로 옮깁니다. 공유 저장소는 기본적으로 사용자 로컬 앱 데이터 아래 `ESOT`에 생성됩니다. `init` 전에 `ESOT_HOME`을 지정하면 위치를 선택할 수 있습니다. 백업할 때는 이 저장소와 각 워크트리를 함께 보관합니다. 이 버전은 한 PC에서 고정된 폴더 경로를 사용합니다.
 
 ## 자동화와 테스트
 

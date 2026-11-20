@@ -66,6 +66,35 @@ namespace Esot.Tests
 
         private static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
+        private static void CheckStorageMigration(string common, string peer)
+        {
+            string before = Run(common, 0, "status");
+            string peerBefore = Run(peer, 0, "status");
+            string legacy = Path.Combine(common, ".storage");
+            string nested = Path.Combine(common, ".worktree", "storage");
+            string peerLegacy = Path.Combine(peer, ".storage");
+            string peerNested = Path.Combine(peer, ".worktree", "storage");
+            var retired = Path.Combine(nested, Hash("x1"));
+            var retiredAt = File.GetLastWriteTimeUtc(retired);
+            Directory.Move(nested, legacy);
+            Directory.Move(peerNested, peerLegacy);
+
+            // An occupied destination must survive a failed migration and a retry.
+            Directory.CreateDirectory(nested);
+            var occupied = Path.Combine(nested, Hash("x1"));
+            File.WriteAllText(occupied, "other");
+            Check(Run(common, 1, "status").Contains("Both snapshot locations exist"), "Missed migration conflict");
+            Check(File.ReadAllText(occupied) == "other" && File.ReadAllText(Path.Combine(legacy, Hash("x1"))) == "x1", "Overwrote a snapshot");
+            File.Delete(occupied);
+            Directory.Delete(nested);
+
+            Check(Run(common, 0, "status") == before, "Migration changed local state");
+            Check(!Directory.Exists(legacy) && !Directory.Exists(peerLegacy), "Left a legacy snapshot directory");
+            Check(File.ReadAllText(retired) == "x1" && File.GetLastWriteTimeUtc(retired) == retiredAt, "Changed retained history");
+            Check(File.ReadAllText(Path.Combine(peerNested, Hash("x2"))) == "x2", "Lost peer snapshot");
+            Check(Run(peer, 0, "status") == peerBefore, "Migration changed peer state");
+        }
+
         private static void Integration(string root)
         {
             string a = Path.Combine(root, "A"), b = Path.Combine(root, "B"), c = Path.Combine(root, "C");
@@ -85,11 +114,12 @@ namespace Esot.Tests
             Check(!File.Exists(FileAt(b) + ".meta"), "Ignored meta was copied");
             File.WriteAllText(FileAt(b), "x2");
             Run(b, 0, "commit", "-m", "Add ears");
-            Check(!File.Exists(Path.Combine(b, ".storage", Hash("x1"))), "Zero retention");
+            Check(!File.Exists(Path.Combine(b, ".worktree", "storage", Hash("x1"))), "Zero retention");
             Run(a, 0, "merge", "B");
             Check(File.ReadAllText(FileAt(a)) == "x2", "Incoming data");
-            Check(File.Exists(Path.Combine(a, ".storage", Hash("x1"))), "Common history");
+            Check(File.Exists(Path.Combine(a, ".worktree", "storage", Hash("x1"))), "Common history");
             Check(Run(b, 0, "log").Contains("Merge B into A (source)"), "Source receipt");
+            CheckStorageMigration(a, b);
             File.WriteAllText(FileAt(a), "x3");
             Run(a, 0, "commit", "-m", "Remove tail");
             File.WriteAllText(FileAt(b), "x4");
@@ -129,10 +159,10 @@ namespace Esot.Tests
             Check(File.ReadAllText(FileAt(a) + ".meta") == "guid: original", "Modified ignored content");
             Run(a, 0, "config", "storage.limit", "0");
             Run(a, 0, "gc");
-            Check(!File.Exists(Path.Combine(a, ".storage", Hash("x1"))), "Old content retained");
+            Check(!File.Exists(Path.Combine(a, ".worktree", "storage", Hash("x1"))), "Old content retained");
             Run(a, 1, "restore", "--source", first, rabbit);
             Check(!File.Exists(FileAt(a)), "Restore of missing object changed worktree");
-            Check(File.Exists(Path.Combine(a, ".storage", Hash("a"))), "Deleted current snapshot");
+            Check(File.Exists(Path.Combine(a, ".worktree", "storage", Hash("a"))), "Deleted current snapshot");
             string headA = Run(a, 0, "status").Split('\t')[1].Trim();
             string headB = Run(b, 0, "status").Split('\t')[1].Trim();
             using var identity = JsonDocument.Parse(File.ReadAllText(Path.Combine(a, ".worktree", "worktree.json")));
@@ -163,7 +193,7 @@ namespace Esot.Tests
             File.WriteAllText(file, original);
             File.SetLastWriteTimeUtc(file, stamp);
             Run(dir, 0, "init", "Scan");
-            var obj = Path.Combine(dir, ".storage", Hash(original));
+            var obj = Path.Combine(dir, ".worktree", "storage", Hash(original));
 
             // Older worktrees have no index. A warm scan must also work without read access to either stream.
             File.Delete(cache);
@@ -192,7 +222,7 @@ namespace Esot.Tests
             File.SetLastWriteTimeUtc(file, stamp.AddMinutes(2));
             Check(Run(dir, 0, "status").Contains("M\t토끼.psd"), "Same-size change missed");
             Run(dir, 0, "commit", "-m", "Changed bytes");
-            Check(File.ReadAllText(Path.Combine(dir, ".storage", Hash(changed))) == changed, "Snapshot missing after status");
+            Check(File.ReadAllText(Path.Combine(dir, ".worktree", "storage", Hash(changed))) == changed, "Snapshot missing after status");
 
             // An ambiguous timestamp cannot be trusted even when the next edit preserves size and time.
             var future = DateTime.UtcNow.AddMinutes(5);
@@ -208,7 +238,7 @@ namespace Esot.Tests
             File.WriteAllText(file, "short");
             File.SetLastWriteTimeUtc(file, stamp);
             Run(dir, 0, "commit", "-m", "Resize");
-            Check(File.ReadAllText(Path.Combine(dir, ".storage", Hash("short"))) == "short", "Length change missed");
+            Check(File.ReadAllText(Path.Combine(dir, ".worktree", "storage", Hash("short"))) == "short", "Length change missed");
 
             // A dirty path first seen without an object can later encounter an occupied key in a peer.
             string peer = Path.Combine(root, "scan-peer");
@@ -217,7 +247,7 @@ namespace Esot.Tests
             File.WriteAllText(extra, "left");
             File.SetLastWriteTimeUtc(extra, stamp);
             Run(dir, 0, "status");
-            string occupied = Path.Combine(peer, ".storage", Hash("left"));
+            string occupied = Path.Combine(peer, ".worktree", "storage", Hash("left"));
             File.WriteAllText(occupied, "right");
             Check(Run(dir, 1, "commit", "-m", "Reject peer collision").Contains("different bytes"), "Peer mismatch missed");
             Check(File.ReadAllText(extra) == "left" && File.ReadAllText(occupied) == "right", "Peer collision destroyed data");

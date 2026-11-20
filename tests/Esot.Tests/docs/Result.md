@@ -2,6 +2,10 @@
 
 [한국어](Result.ko.md)
 
+## 0.1.2 verification
+
+On 2026-11-20 the Windows Release build completed with zero warnings and errors. All three UniTest seeds reached depth 100. The scan-cache and CLI integration scenarios passed, including migration of two legacy snapshot directories, retention of historical file contents and timestamps, and a retry after a destination conflict.
+
 ## 0.1.1 verification
 
 On 2026-11-19 both the scan-cache and collision scenario and the worktree integration scenario passed on Windows Release. Checks covered cache hits under exclusive locks, detection of mismatched bytes under an occupied key, and preservation of both the working file and stored object. UniTest seeds 0, 1 and 2 each passed to depth 100.
