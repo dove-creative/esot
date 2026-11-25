@@ -2,4 +2,5 @@ artifacts/
 bin/
 obj/
 *.nupkg
+!/packages/*.nupkg
 /tests/Esot.Tests/docs/*.log

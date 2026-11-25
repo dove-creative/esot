@@ -14,9 +14,11 @@ Install Git and the .NET 10 SDK, then build and install the .NET tool from sourc
 git clone --recurse-submodules https://github.com/dove-creative/esot.git
 cd esot
 dotnet pack src/Esot -c Release -o artifacts/packages
-dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.2
+dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.3
 esot --help
 ```
+
+The test project restores UniTest 0.4.3 from the repository-local feed. The source submodule is retained for reference and is not compiled as part of ESOT. Package provenance and the build-only verification scope are recorded in [packages](packages/README.md).
 
 ## First worktree and commit
 

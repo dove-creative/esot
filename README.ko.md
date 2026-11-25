@@ -14,9 +14,11 @@ Git과 .NET 10 SDK가 필요합니다. 소스에서 .NET 도구를 빌드해 설
 git clone --recurse-submodules https://github.com/dove-creative/esot.git
 cd esot
 dotnet pack src/Esot -c Release -o artifacts/packages
-dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.2
+dotnet tool install --global --source ./artifacts/packages ESOT --version 0.1.3
 esot --help
 ```
+
+테스트 프로젝트는 저장소의 로컬 피드에서 UniTest 0.4.3을 복원합니다. 소스 서브모듈은 참고용으로 유지하며 ESOT 빌드에 포함하지 않습니다. 패키지 출처와 빌드만 수행한 검증 범위는 [패키지 안내](packages/README.md)에 기록합니다.
 
 ## 첫 워크트리와 커밋
 

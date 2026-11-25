@@ -5,6 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Esot/Esot.csproj" />
-    <ProjectReference Include="../../dependencies/unitest/src/BlackThunder.UniTest/BlackThunder.UniTest.csproj" />
+    <PackageReference Include="BlackThunder.UniTest" Version="[0.4.3]" PrivateAssets="all" />
   </ItemGroup>
 </Project>
